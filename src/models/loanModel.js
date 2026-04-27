@@ -32,4 +32,35 @@ export const LoanModel = {
     const result = await pool.query(query);
     return result.rows;
   },
+
+  async getTopBorrowers() {
+    const query = `
+      SELECT 
+        m.id AS member_id, 
+        m.full_name, 
+        m.email, 
+        m.member_type, 
+        CAST(COUNT(l.id) AS INTEGER) AS total_loans,
+        MAX(l.loan_date) AS last_loan_date,
+        (
+          SELECT json_build_object(
+            'title', b.title,
+            'times_borrowed', CAST(COUNT(l2.id) AS INTEGER)
+          )
+          FROM loans l2
+          JOIN books b ON l2.book_id = b.id
+          WHERE l2.member_id = m.id
+          GROUP BY b.title
+          ORDER BY COUNT(l2.id) DESC
+          LIMIT 1
+        ) AS favorite_book
+      FROM members m
+      JOIN loans l ON m.id = l.member_id
+      GROUP BY m.id
+      ORDER BY total_loans DESC
+      LIMIT 3
+    `;
+    const result = await pool.query(query);
+    return result.rows;
+  },
 };
