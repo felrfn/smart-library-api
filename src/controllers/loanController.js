@@ -1,4 +1,5 @@
 import { LoanModel } from "../models/loanModel.js";
+
 export const LoanController = {
   async createLoan(req, res) {
     try {
@@ -14,6 +15,16 @@ export const LoanController = {
       res.status(400).json({ error: err.message });
     }
   },
+
+  async returnLoan(req, res) {
+    try {
+      const result = await LoanModel.returnLoan(req.params.id);
+      res.json({ message: "Buku berhasil dikembalikan.", data: result });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+
   async getLoans(req, res) {
     try {
       res.json(await LoanModel.getAllLoans());
@@ -21,6 +32,7 @@ export const LoanController = {
       res.status(500).json({ error: err.message });
     }
   },
+
   async getTopBorrowers(req, res) {
     try {
       const topBorrowers = await LoanModel.getTopBorrowers();

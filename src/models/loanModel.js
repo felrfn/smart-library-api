@@ -1,4 +1,5 @@
 import { pool } from "../config/db.js";
+
 export const LoanModel = {
   async createLoan(book_id, member_id, due_date) {
     const client = await pool.connect();
@@ -27,6 +28,50 @@ export const LoanModel = {
       client.release();
     }
   },
+
+  async returnLoan(loan_id) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const loanRes = await client.query(
+        "SELECT id, book_id, status FROM loans WHERE id = $1 FOR UPDATE",
+        [loan_id],
+      );
+      const loan = loanRes.rows[0];
+      if (!loan) throw new Error("Transaksi peminjaman tidak ditemukan.");
+      if (String(loan.status).toUpperCase() !== "BORROWED")
+        throw new Error("Peminjaman tidak dalam status BORROWED.");
+
+      const updatedLoan = await client.query(
+        `UPDATE loans
+         SET status = 'RETURNED',
+             return_date = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [loan_id],
+      );
+      if (!updatedLoan.rows[0]) throw new Error("Gagal memperbarui status peminjaman.");
+
+      const bookRes = await client.query(
+        `UPDATE books
+         SET available_copies = LEAST(total_copies, available_copies + 1)
+         WHERE id = $1
+         RETURNING id, available_copies, total_copies`,
+        [loan.book_id],
+      );
+      if (!bookRes.rows[0]) throw new Error("Gagal memperbarui stok buku.");
+
+      await client.query("COMMIT");
+      return { loan: updatedLoan.rows[0], book: bookRes.rows[0] };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   async getAllLoans() {
     const query = `SELECT l.*, b.title as book_title, m.full_name as member_name FROM loans l JOIN books b ON l.book_id = b.id JOIN members m ON l.member_id = m.id`;
     const result = await pool.query(query);
